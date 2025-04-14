@@ -1,45 +1,39 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
-from .models import User, Event, Ticket
+from event_api.models import *
 from django.db import transaction
+from django.contrib.auth.password_validation import validate_password
 
-class UserRegisterSerializer(serializers.ModelSerializer):
-    """
-    Serializer for user registration.
-
-    This serializer handles user creation by accepting a username, password, 
-    and an optional role field. The password is write-only to ensure security.
-
-    Attributes:
-        password (CharField): Write-only field for user password.
-    """
-
-    password = serializers.CharField(write_only=True)
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
+    confirm_password = serializers.CharField(write_only=True, required=True)
+    role = serializers.ChoiceField(choices=User.ROLE_CHOICES)
 
     class Meta:
         model = User
-        fields = ['username', 'password', 'role']
+        fields = ['email', 'password', 'confirm_password', 'role']
+
+    def validate(self, attrs):
+        if attrs['password'] != attrs['confirm_password']:
+            raise serializers.ValidationError({"password": "Password and confirm password do not match."})
+        return attrs
 
     def create(self, validated_data):
-        """
-        Creates a new user instance.
+        validated_data.pop('confirm_password')  # Remove before creating user
 
-        Uses Django's `create_user` method to securely hash the password 
-        and assign a role (default: 'User').
-
-        Args:
-            validated_data (dict): Validated user data including username, password, and role.
-
-        Returns:
-            User: The newly created user instance.
-        """
         user = User.objects.create_user(
-            username=validated_data['username'],
+            email=validated_data['email'],
             password=validated_data['password'],
-            role=validated_data.get('role', 'User')
+            role=validated_data['role']
         )
         return user
 
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        exclude = ['user', 'created_at', 'updated_at']
+    
 
 class UserLoginSerializer(serializers.Serializer):
     """

@@ -2,60 +2,37 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User, Event
-from .serializers import UserRegisterSerializer, UserLoginSerializer, EventSerializer, TicketPurchaseSerializer
+from event_api.models import *
+from event_api.serializers import *
 from rest_framework.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
 from event_api.permissions import IsAdminUser, IsRegularUser
+from rest_framework.views import APIView
 
-class RegisterView(generics.CreateAPIView):
-    """
-    API view for user registration.
 
-    This view allows users to register by providing their details.
-    It handles validation errors, integrity errors (e.g., duplicate usernames),
-    and other unexpected exceptions.
-
-    Attributes:
-        queryset (QuerySet): A queryset of all User objects.
-        serializer_class (Serializer): Serializer used for user registration.
-        permission_classes (list): List of permissions required (AllowAny).
-    """
-    queryset = User.objects.all()
-    serializer_class = UserRegisterSerializer
-    permission_classes = [AllowAny]
-
-    def create(self, request, *args, **kwargs):
-        """
-        Handles user registration.
-
-        Validates the provided data, saves the user if valid, and returns a success response.
-        Catches and handles validation errors, integrity errors, and other exceptions.
-
-        Args:
-            request (Request): The HTTP request object.
-
-        Returns:
-            Response: A success response if registration is successful,
-                      or an error response if an exception occurs.
-        """
-        try:
-            serializer = self.get_serializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            
-            return Response({"message": "Registered successfully"}, status=status.HTTP_200_OK)
-        
-        except ValidationError as e:
-            return Response({"error": e.detail}, status=status.HTTP_400_BAD_REQUEST)
-        
-        except IntegrityError:
-            return Response({"error": "Username already exists"}, status=status.HTTP_400_BAD_REQUEST)
-
-        except Exception as e:
-            return Response({"error": "Something went wrong", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+class RegisterView(APIView):
+    def post(self, request):
+        serializer = RegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            user.is_active = False
+            user.save()
+            return Response({'message': 'User registered successfully'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
                         
+
+class SetupProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        profile, created = Profile.objects.get_or_create(user=request.user)
+        serializer = ProfileSerializer(instance=profile, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'message': 'Profile setup successful'}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
 class LoginView(generics.GenericAPIView):
     """

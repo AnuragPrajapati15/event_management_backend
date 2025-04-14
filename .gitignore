@@ -9,6 +9,7 @@ __pycache__/
 
 # Django/migrations
 db.sqlite3
+eventDB
 *.sqlite3
 */migrations/*.py
 */migrations/*.pyc
